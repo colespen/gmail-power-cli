@@ -1,0 +1,37 @@
+{
+  "name": "gmail-power-cli",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/mcp-server.ts",
+    "start": "node dist/mcp-server.js",
+    "cli": "tsx src/cli.ts",
+    "auth": "tsx src/auth.ts",
+    "gmail": "tsx src/cli-gemini.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.61.0",
+    "@google-cloud/local-auth": "^3.0.1",
+    "@google/generative-ai": "^0.24.1",
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.0",
+    "dotenv": "^17.2.2",
+    "googleapis": "^159.0.0",
+    "inquirer": "^12.9.4",
+    "ora": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "nodemon": "^3.1.10",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
