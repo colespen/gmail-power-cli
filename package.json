@@ -11,6 +11,7 @@
     "cli": "tsx src/cli.ts",
     "auth": "tsx src/auth.ts",
     "gmail": "tsx src/cli-gemini.ts",
+    "gmail:debug": "NODE_ENV=development tsx src/cli-gemini-debug.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
