@@ -110,13 +110,13 @@ class GmailAICLI {
         type: "function" as const,
         function: {
           name: "read_email",
-          description: "Read the full content of a specific email by its ID",
+          description: "Read the full content of a specific email by its ID. Use actual message IDs from search results, or contextual references like 'first', 'last', '1', '2', etc.",
           parameters: {
             type: "object",
             properties: {
               messageId: {
                 type: "string",
-                description: "The email message ID to read",
+                description: "The email message ID to read. Use: actual Gmail message ID from search results, OR contextual reference like 'first' (first email from last search), 'last' (last email from search), '1' (first email), '2' (second email), etc.",
               },
             },
             required: ["messageId"],
@@ -629,6 +629,12 @@ class GmailAICLI {
                     - "Move emails to X" → add label X, do NOT remove from INBOX unless asked
                     - "Archive emails" → user explicitly wants to remove from INBOX
 
+                    READING EMAILS:
+                    - NEVER use descriptive text as messageId (like "ID of email sent to Michael")
+                    - ALWAYS use actual message IDs from search results OR contextual references
+                    - Use "first", "last", "1", "2", etc. for emails from recent search
+                    - If no recent search, tell user to search first
+
                     FILTER CREATION:
                     - For "emails from X go to Y label": create_filter with criteria.from and action.addLabelIds
                     - Only add removeLabelIds: ["INBOX"] if user says "skip inbox" or "archive automatically"
@@ -710,7 +716,7 @@ class GmailAICLI {
       if (error.message.includes("rate")) {
         console.log(
           chalk.yellow(
-            "\n💡 Tip: Groq has a rate limit of 30 requests/minute. Wait a moment and try again."
+            "\n💡 Groq service tier `on_demand` tokens per day (TPD): Limit 100000."
           )
         );
       }
@@ -879,8 +885,8 @@ class GmailAICLI {
   async start(): Promise<void> {
     console.clear();
     console.log(chalk.bold.green("╔════════════════════════════════════════╗"));
-    console.log(chalk.bold.green("║     🚀 Gmail AI Assistant              ║"));
-    console.log(chalk.bold.green("║     Powered by Groq (Llama 3.3)       ║"));
+    console.log(chalk.bold.green("║     📨 Gmail AI Assistant              ║"));
+    console.log(chalk.bold.green("║     Powered by Groq (Llama 3.3)        ║"));
     console.log(chalk.bold.green("╚════════════════════════════════════════╝"));
     console.log();
     console.log(chalk.cyan("Natural language Gmail control - Fast & Free!"));

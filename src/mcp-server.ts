@@ -1,7 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-    CallToolRequest,
+  CallToolRequest,
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -169,148 +169,161 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 }));
 
 // handle tool execution
-server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
-  const { name, arguments: args } = request.params;
+server.setRequestHandler(
+  CallToolRequestSchema,
+  async (request: CallToolRequest) => {
+    const { name, arguments: args } = request.params;
 
-  if (!args || typeof args !== "object") {
-    return {
-      content: [
-        {
-          type: "text",
-          text: "Error: Missing or invalid arguments",
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  try {
-    // ensure Gmail service is initialized
-    if (!gmailService["gmail"]) {
-      await gmailService.initialize();
+    if (!args || typeof args !== "object") {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Error: Missing or invalid arguments",
+          },
+        ],
+        isError: true,
+      };
     }
 
-    switch (name) {
-      case "search_emails":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await gmailService.searchEmails(
-                  args.query,
-                  args.maxResults || 10
+    try {
+      // ensure Gmail service is initialized
+      if (!gmailService["gmail"]) {
+        await gmailService.initialize();
+      }
+
+      switch (name) {
+        case "search_emails":
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  await gmailService.searchEmails(
+                    args.query,
+                    args.maxResults || 10
+                  ),
+                  // below is not great, can do better
+                  // await gmailService.searchEmails(
+                  //   args.query as string,
+                  //   typeof args.maxResults === "number" ? args.maxResults : 10
+                  // ),
+                  null,
+                  2
                 ),
-                null,
-                2
-              ),
-            },
-          ],
-        };
+              },
+            ],
+          };
 
-      case "read_email":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await gmailService.readEmail(args.messageId),
-                null,
-                2
-              ),
-            },
-          ],
-        };
-
-      case "send_email":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await gmailService.sendEmail(args.to, args.subject, args.body, {
-                  cc: args.cc,
-                  bcc: args.bcc,
-                  threadId: args.threadId,
-                }),
-                null,
-                2
-              ),
-            },
-          ],
-        };
-
-      case "modify_labels":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await gmailService.modifyLabels(
-                  args.messageIds,
-                  args.addLabels,
-                  args.removeLabels
+        case "read_email":
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  await gmailService.readEmail(args.messageId),
+                  null,
+                  2
                 ),
-                null,
-                2
-              ),
-            },
-          ],
-        };
+              },
+            ],
+          };
 
-      case "batch_operation":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await gmailService.batchOperation(args.query, args.operation),
-                null,
-                2
-              ),
-            },
-          ],
-        };
+        case "send_email":
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  await gmailService.sendEmail(
+                    args.to,
+                    args.subject,
+                    args.body,
+                    {
+                      cc: args.cc,
+                      bcc: args.bcc,
+                      threadId: args.threadId,
+                    }
+                  ),
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
 
-      case "list_labels":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(await gmailService.listLabels(), null, 2),
-            },
-          ],
-        };
+        case "modify_labels":
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  await gmailService.modifyLabels(
+                    args.messageIds,
+                    args.addLabels,
+                    args.removeLabels
+                  ),
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
 
-      case "create_label":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                await gmailService.createLabel(args.name),
-                null,
-                2
-              ),
-            },
-          ],
-        };
+        case "batch_operation":
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  await gmailService.batchOperation(args.query, args.operation),
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
 
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+        case "list_labels":
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(await gmailService.listLabels(), null, 2),
+              },
+            ],
+          };
+
+        case "create_label":
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  await gmailService.createLabel(args.name),
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+
+        default:
+          throw new Error(`Unknown tool: ${name}`);
+      }
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: ${error}`,
+          },
+        ],
+        isError: true,
+      };
     }
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Error: ${error}`,
-        },
-      ],
-      isError: true,
-    };
   }
-});
+);
 
 // start server
 async function main() {
