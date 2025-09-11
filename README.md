@@ -4,6 +4,9 @@
 
 A command-line interface for Gmail that integrates with AI assistants through Model Context Protocol (MCP) server functionality.
 
+CLI example:
+![CLI Example](./docs/CLI-screengrab-ex1.png)
+
 ## Features
 
 - Search Gmail messages with natural language queries
