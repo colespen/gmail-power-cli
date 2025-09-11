@@ -54,7 +54,7 @@ class GmailAICLI {
   private async promptUser(): Promise<string> {
     return new Promise((resolve) => {
       process.stdout.write(chalk.blue("\nGmail AI > "));
-      
+
       // Create a fresh readline interface for each prompt
       const rl = readline.createInterface({
         input: process.stdin,
@@ -68,7 +68,7 @@ class GmailAICLI {
         resolve(line.trim());
       };
 
-      rl.once('line', handleLine);
+      rl.once("line", handleLine);
     });
   }
 
@@ -359,9 +359,7 @@ Examples:
     console.log(chalk.bold.green("║     Powered by Google Gemini (FREE)    ║"));
     console.log(chalk.bold.green("╚════════════════════════════════════════╝"));
     console.log();
-    console.log(
-      chalk.cyan('Try: "show my recent emails" or "help" for more')
-    );
+    console.log(chalk.cyan('Try: "show my recent emails" or "help" for more'));
 
     // Initialize Gmail service early
     try {
