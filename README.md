@@ -14,11 +14,13 @@ A command-line interface for Gmail that integrates with AI assistants through Mo
 ## Setup
 
 1. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 2. **Set up Google Cloud Console:**
+
    - Create project at https://console.cloud.google.com
    - Enable Gmail API
    - Data Access / scopes: gmail.modify
@@ -27,10 +29,14 @@ A command-line interface for Gmail that integrates with AI assistants through Mo
 
 3. **Configure environment variables:**
    Create a `.env` file:
+
+   Currently most success using Groq free tier:
+
+   Get your free API key from: https://console.groq.com/keys
+
    ```
-   GEMINI_API_KEY=your-gemini-api-key
+   GROQ_API_KEY=your-groq-api-key
    ```
-   Get your free API key from: https://aistudio.google.com/app/apikey
 
 4. **Authenticate with Gmail:**
    ```bash
@@ -40,16 +46,19 @@ A command-line interface for Gmail that integrates with AI assistants through Mo
 ## Usage
 
 **CLI Mode:**
+
 ```bash
 npm run gmail
 ```
 
 **MCP Server Mode:**
+
 ```bash
 npm run start
 ```
 
 **Development:**
+
 ```bash
 npm run dev
 ```
