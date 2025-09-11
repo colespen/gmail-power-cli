@@ -299,13 +299,13 @@ export class GmailService {
     const gmail = this.ensureInitialized();
 
     try {
-      // Build the filter object
+      // build the filter object
       const filter = {
         criteria: {},
         action: {},
       } as any;
 
-      // Map criteria
+      // map criteria
       if (criteria.from) {
         filter.criteria.from = criteria.from;
       }
@@ -322,11 +322,16 @@ export class GmailService {
         filter.criteria.hasAttachment = criteria.hasAttachment;
       }
 
-      // Map actions
-      if (action.addLabelIds) filter.action.addLabelIds = action.addLabelIds;
-      if (action.removeLabelIds)
+      // map actions
+      if (action.addLabelIds) {
+        filter.action.addLabelIds = action.addLabelIds;
+      }
+      if (action.removeLabelIds) {
         filter.action.removeLabelIds = action.removeLabelIds;
-      if (action.forward) filter.action.forward = action.forward;
+      }
+      if (action.forward) {
+        filter.action.forward = action.forward;
+      }
 
       const response = await gmail.users.settings.filters.create({
         userId: "me",
