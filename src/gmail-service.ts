@@ -294,4 +294,73 @@ export class GmailService {
       throw new Error(`Failed to create label: ${error}`);
     }
   }
+
+  async createFilter(criteria: any, action: any) {
+    const gmail = this.ensureInitialized();
+
+    try {
+      // Build the filter object
+      const filter = {
+        criteria: {},
+        action: {},
+      } as any;
+
+      // Map criteria
+      if (criteria.from) filter.criteria.from = criteria.from;
+      if (criteria.to) filter.criteria.to = criteria.to;
+      if (criteria.subject) filter.criteria.subject = criteria.subject;
+      if (criteria.query) filter.criteria.query = criteria.query;
+      if (criteria.hasAttachment !== undefined) {
+        filter.criteria.hasAttachment = criteria.hasAttachment;
+      }
+
+      // Map actions
+      if (action.addLabelIds) filter.action.addLabelIds = action.addLabelIds;
+      if (action.removeLabelIds)
+        filter.action.removeLabelIds = action.removeLabelIds;
+      if (action.forward) filter.action.forward = action.forward;
+
+      const response = await gmail.users.settings.filters.create({
+        userId: "me",
+        requestBody: filter,
+      });
+
+      return {
+        id: response.data.id,
+        criteria: response.data.criteria,
+        action: response.data.action,
+      };
+    } catch (error) {
+      throw new Error(`Failed to create filter: ${error}`);
+    }
+  }
+
+  async listFilters() {
+    const gmail = this.ensureInitialized();
+
+    try {
+      const response = await gmail.users.settings.filters.list({
+        userId: "me",
+      });
+
+      return response.data.filter || [];
+    } catch (error) {
+      throw new Error(`Failed to list filters: ${error}`);
+    }
+  }
+
+  async deleteFilter(filterId: string) {
+    const gmail = this.ensureInitialized();
+
+    try {
+      await gmail.users.settings.filters.delete({
+        userId: "me",
+        id: filterId,
+      });
+
+      return { success: true, filterId };
+    } catch (error) {
+      throw new Error(`Failed to delete filter: ${error}`);
+    }
+  }
 }
