@@ -3,6 +3,7 @@ import Groq from "groq-sdk";
 import * as readline from "readline";
 import chalk from "chalk";
 import ora from "ora";
+import inquirer from "inquirer";
 
 interface ToolCall {
   name: string;
@@ -243,10 +244,135 @@ class GmailAICLI {
           },
         },
       },
+      {
+        type: "function" as const,
+        function: {
+          name: "create_filter",
+          description:
+            "Create a Gmail filter to automatically process incoming emails",
+          parameters: {
+            type: "object",
+            properties: {
+              criteria: {
+                type: "object",
+                properties: {
+                  from: {
+                    type: "string",
+                    description:
+                      'Filter emails from this address/domain (e.g., "*@email.shopify.com")',
+                  },
+                  to: {
+                    type: "string",
+                    description: "Filter emails to this address",
+                  },
+                  subject: {
+                    type: "string",
+                    description: "Filter emails with this in subject",
+                  },
+                  query: {
+                    type: "string",
+                    description: "Gmail search query for complex filters",
+                  },
+                  hasAttachment: {
+                    type: "boolean",
+                    description: "Filter emails with attachments",
+                  },
+                },
+                description: "Criteria for the filter",
+              },
+              action: {
+                type: "object",
+                properties: {
+                  addLabelIds: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Label IDs to apply to matching emails",
+                  },
+                  removeLabelIds: {
+                    type: "array",
+                    items: { type: "string" },
+                    description:
+                      "Label IDs to remove (use carefully - INBOX means skip inbox/archive)",
+                  },
+                  forward: {
+                    type: "string",
+                    description: "Forward to this email address",
+                  },
+                },
+                description: "Actions to perform on matching emails",
+              },
+            },
+            required: ["criteria", "action"],
+          },
+        },
+      },
+      {
+        type: "function" as const,
+        function: {
+          name: "list_filters",
+          description: "List all existing Gmail filters",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      },
+      {
+        type: "function" as const,
+        function: {
+          name: "confirm_dangerous_action",
+          description: "Ask user to confirm potentially dangerous actions",
+          parameters: {
+            type: "object",
+            properties: {
+              action: {
+                type: "string",
+                description: "Description of the action to confirm",
+              },
+              details: {
+                type: "string",
+                description: "Details about what will happen",
+              },
+            },
+            required: ["action", "details"],
+          },
+        },
+      },
     ];
   }
 
-  private async callTool(toolName: string, args: any): Promise<any> {
+  private async confirmAction(
+    action: string,
+    details: string,
+    spinner?: any
+  ): Promise<boolean> {
+    // Stop the spinner if provided to allow proper prompt display
+    if (spinner) {
+      spinner.stop();
+    }
+
+    console.log(chalk.yellow(`\n⚠️  Confirmation Required:`));
+    console.log(chalk.white(`Action: ${action}`));
+    console.log(chalk.gray(`Details: ${details}`));
+
+    const { confirm } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "confirm",
+        message: "Do you want to proceed?",
+        default: false,
+      },
+    ]);
+
+    // Restart the spinner if provided and confirmation is true
+    if (spinner && confirm) {
+      spinner.start();
+    }
+
+    return confirm;
+  }
+
+  private async callTool(toolName: string, args: any, spinner?: any): Promise<any> {
     const service = await this.initializeGmailService();
 
     switch (toolName) {
@@ -376,7 +502,68 @@ class GmailAICLI {
           removeLabelIds
         );
 
+      case "create_filter":
+        // Convert label names to IDs in the action
+        if (args.action.addLabelIds) {
+          const labelIds = await Promise.all(
+            args.action.addLabelIds.map(async (label: string) => {
+              if (label.toUpperCase() === label) return label; // System label
+              const labelId = this.getLabelIdByName(label);
+              if (!labelId) {
+                await this.refreshLabelsCache();
+                const refreshedId = this.getLabelIdByName(label);
+                if (!refreshedId) {
+                  throw new Error(`Label not found: ${label}`);
+                }
+                return refreshedId;
+              }
+              return labelId;
+            })
+          );
+          args.action.addLabelIds = labelIds;
+        }
+
+        // Warn if archiving (removing from INBOX)
+        if (args.action.removeLabelIds?.includes("INBOX")) {
+          const confirmed = await this.confirmAction(
+            "Create filter that archives emails",
+            `Emails matching this filter will skip the inbox (be archived automatically)`,
+            spinner
+          );
+          if (!confirmed) {
+            return { cancelled: true };
+          }
+        }
+
+        return await service.createFilter(args.criteria, args.action);
+
+      case "list_filters":
+        return await service.listFilters();
+
+      case "confirm_dangerous_action":
+        const confirmed = await this.confirmAction(args.action, args.details, spinner);
+        return { confirmed };
+
       case "batch_operation":
+        // Add safety check for batch operations
+        if (args.operation === "delete") {
+          const confirmed = await this.confirmAction(
+            "Batch delete emails",
+            `This will move emails matching "${args.query}" to trash`
+          );
+          if (!confirmed) {
+            return { cancelled: true, operation: args.operation };
+          }
+        }
+        if (args.operation === "archive") {
+          const confirmed = await this.confirmAction(
+            "Batch archive emails",
+            `This will remove emails matching "${args.query}" from inbox`
+          );
+          if (!confirmed) {
+            return { cancelled: true, operation: args.operation };
+          }
+        }
         return await service.batchOperation(args.query, args.operation);
 
       case "send_email":
@@ -403,7 +590,7 @@ class GmailAICLI {
     const spinner = ora("Thinking...").start();
 
     try {
-      // Build context information
+      // build context information
       let contextInfo = "";
 
       if (this.lastReadEmailId) {
@@ -424,29 +611,32 @@ class GmailAICLI {
         contextInfo += `\nMost recent email from search: "${lastEmail.subject}" from ${lastEmail.from} (ID: ${lastEmail.id})`;
       }
 
-      // Build the messages with context
+      // builde messages with context
       const messages: any[] = [
         {
           role: "system",
-          content: `You are a helpful Gmail assistant. You help users manage their emails efficiently.
+          content: `You are a helpful Gmail assistant. You help users manage their emails efficiently and SAFELY.
 
-IMPORTANT CONTEXT RULES:
-- When user says "it", "this email", "that email" - use the last read email ID or the first from recent search
-- When user says "them", "those emails", "these" - use all IDs from the recent search
-- When creating nested labels, use "/" (e.g., "Work/Shopify")
-- When moving emails to labels, use the label name in addLabels
-- Always be helpful and execute the most logical action based on context
+                    CRITICAL SAFETY RULES:
+                    1. NEVER archive emails (removeLabels: ["INBOX"]) unless explicitly asked
+                    2. NEVER delete emails unless explicitly asked
+                    3. When creating filters, only skip inbox if user says "skip inbox" or "archive"
+                    4. Always use create_filter for filter requests, not batch_operation
 
-${contextInfo}
+                    UNDERSTANDING USER INTENT:
+                    - "Create a filter" or "add a filter" → use create_filter tool
+                    - "Apply to existing emails" → use batch_operation or modify_labels
+                    - "Move emails to X" → add label X, do NOT remove from INBOX unless asked
+                    - "Archive emails" → user explicitly wants to remove from INBOX
 
-LABEL OPERATIONS:
-- To apply a label: use modify_labels with addLabels: ["label_name"]
-- To move to a label: use modify_labels with addLabels: ["label_name"] and removeLabels: ["INBOX"] if archiving
-- To mark as read: removeLabels: ["UNREAD"]
-- To star: addLabels: ["STARRED"]
-- To archive: removeLabels: ["INBOX"]
+                    FILTER CREATION:
+                    - For "emails from X go to Y label": create_filter with criteria.from and action.addLabelIds
+                    - Only add removeLabelIds: ["INBOX"] if user says "skip inbox" or "archive automatically"
+                    - Use wildcards for domains: "*@domain.com" matches all emails from that domain
 
-When user says "move this email to X label", use the last read email ID or most recent search result.`,
+                    ${contextInfo}
+
+                    Remember: Be conservative with destructive actions. When in doubt, don't archive or delete.`,
         },
         ...this.conversationHistory,
         {
@@ -492,7 +682,7 @@ When user says "move this email to X label", use the last read email ID or most 
               )
             );
 
-            const result = await this.callTool(toolCall.function.name, args);
+            const result = await this.callTool(toolCall.function.name, args, toolSpinner);
             toolSpinner.succeed(`Completed ${toolCall.function.name}`);
 
             // Display results
@@ -582,6 +772,65 @@ When user says "move this email to X label", use the last read email ID or most 
       case "create_label":
         console.log(chalk.green(`\n✅ Label created successfully!`));
         console.log(chalk.white(`Label name: ${result.name}`));
+        break;
+
+      case "create_filter":
+        if (result.cancelled) {
+          console.log(chalk.yellow("\n❌ Filter creation cancelled"));
+        } else {
+          console.log(chalk.green("\n✅ Filter created successfully!"));
+          if (result.criteria) {
+            console.log(chalk.white("Criteria:"));
+            Object.entries(result.criteria).forEach(([key, value]) => {
+              console.log(chalk.gray(`  ${key}: ${value}`));
+            });
+          }
+          if (result.action) {
+            console.log(chalk.white("Actions:"));
+            if (result.action.addLabelIds) {
+              console.log(
+                chalk.gray(
+                  `  Apply labels: ${result.action.addLabelIds.join(", ")}`
+                )
+              );
+            }
+            if (result.action.removeLabelIds) {
+              console.log(
+                chalk.gray(
+                  `  Remove labels: ${result.action.removeLabelIds.join(", ")}`
+                )
+              );
+            }
+          }
+        }
+        break;
+
+      case "list_filters":
+        console.log(chalk.bold("\n📋 Gmail Filters:\n"));
+        if (result.length === 0) {
+          console.log(chalk.gray("No filters found"));
+        } else {
+          result.forEach((filter: any, i: number) => {
+            console.log(chalk.white(`${i + 1}. Filter ID: ${filter.id}`));
+            if (filter.criteria) {
+              console.log(chalk.gray("   Criteria:"), filter.criteria);
+            }
+            if (filter.action) {
+              console.log(chalk.gray("   Actions:"), filter.action);
+            }
+            console.log();
+          });
+        }
+        break;
+
+      case "batch_operation":
+        if (result.cancelled) {
+          console.log(chalk.yellow(`\n❌ Batch ${result.operation} cancelled`));
+        } else {
+          console.log(chalk.green(`\n✅ Batch operation completed!`));
+          console.log(chalk.white(`Operation: ${result.operation}`));
+          console.log(chalk.gray(`Affected ${result.affected} emails`));
+        }
         break;
 
       default:

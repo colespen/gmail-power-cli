@@ -306,10 +306,18 @@ export class GmailService {
       } as any;
 
       // Map criteria
-      if (criteria.from) filter.criteria.from = criteria.from;
-      if (criteria.to) filter.criteria.to = criteria.to;
-      if (criteria.subject) filter.criteria.subject = criteria.subject;
-      if (criteria.query) filter.criteria.query = criteria.query;
+      if (criteria.from) {
+        filter.criteria.from = criteria.from;
+      }
+      if (criteria.to) {
+        filter.criteria.to = criteria.to;
+      }
+      if (criteria.subject) {
+        filter.criteria.subject = criteria.subject;
+      }
+      if (criteria.query) {
+        filter.criteria.query = criteria.query;
+      }
       if (criteria.hasAttachment !== undefined) {
         filter.criteria.hasAttachment = criteria.hasAttachment;
       }

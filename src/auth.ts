@@ -4,7 +4,10 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { OAuth2Client } from "google-auth-library";
 
-const SCOPES = ["https://www.googleapis.com/auth/gmail.modify"];
+const SCOPES = [
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.settings.basic"
+];
 const TOKEN_PATH = path.join(process.cwd(), "token.json");
 const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
 
