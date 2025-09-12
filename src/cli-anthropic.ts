@@ -1,6 +1,7 @@
 // currently not in use - using Gemini (free tier available)
 import "dotenv/config";
 import { Anthropic } from "@anthropic-ai/sdk";
+import type { MessageParam } from "@anthropic-ai/sdk/resources";
 import { spawn } from "child_process";
 import * as readline from "readline";
 import chalk from "chalk";
@@ -16,7 +17,7 @@ interface ToolCall {
 class GmailAICLI {
   private anthropic: Anthropic;
   private rl: readline.Interface;
-  private context: string[] = [];
+  private context: MessageParam[] = [];
 
   constructor() {
     // Check for API key

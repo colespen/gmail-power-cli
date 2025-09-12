@@ -6,9 +6,20 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { GmailService } from "./gmail-service.js";
+import { GmailHandlers } from "./handlers.js";
+import {
+  SearchEmailsSchema,
+  ReadEmailSchema,
+  SendEmailSchema,
+  ModifyLabelsSchema,
+  BatchOperationSchema,
+  CreateLabelSchema,
+  validateArgs,
+} from "./schemas.js";
 
-// init Gmail service
+// init services
 const gmailService = new GmailService();
+const handlers = new GmailHandlers(gmailService);
 
 // create MCP server
 const server = new Server(
@@ -193,120 +204,111 @@ server.setRequestHandler(
       }
 
       switch (name) {
-        case "search_emails":
+        case "search_emails": {
+          const validArgs = validateArgs(SearchEmailsSchema, args);
           return {
             content: [
               {
                 type: "text",
                 text: JSON.stringify(
-                  await gmailService.searchEmails(
-                    args.query,
-                    args.maxResults || 10
-                  ),
-                  // below is not great, can do better
-                  // await gmailService.searchEmails(
-                  //   args.query as string,
-                  //   typeof args.maxResults === "number" ? args.maxResults : 10
-                  // ),
+                  await handlers.searchEmails(validArgs),
                   null,
                   2
                 ),
               },
             ],
           };
+        }
 
-        case "read_email":
+        case "read_email": {
+          const validArgs = validateArgs(ReadEmailSchema, args);
           return {
             content: [
               {
                 type: "text",
                 text: JSON.stringify(
-                  await gmailService.readEmail(args.messageId),
+                  await handlers.readEmail(validArgs),
                   null,
                   2
                 ),
               },
             ],
           };
+        }
 
-        case "send_email":
+        case "send_email": {
+          const validArgs = validateArgs(SendEmailSchema, args);
           return {
             content: [
               {
                 type: "text",
                 text: JSON.stringify(
-                  await gmailService.sendEmail(
-                    args.to,
-                    args.subject,
-                    args.body,
-                    {
-                      cc: args.cc,
-                      bcc: args.bcc,
-                      threadId: args.threadId,
-                    }
-                  ),
+                  await handlers.sendEmail(validArgs),
                   null,
                   2
                 ),
               },
             ],
           };
+        }
 
-        case "modify_labels":
+        case "modify_labels": {
+          const validArgs = validateArgs(ModifyLabelsSchema, args);
           return {
             content: [
               {
                 type: "text",
                 text: JSON.stringify(
-                  await gmailService.modifyLabels(
-                    args.messageIds,
-                    args.addLabels,
-                    args.removeLabels
-                  ),
+                  await handlers.modifyLabels(validArgs),
                   null,
                   2
                 ),
               },
             ],
           };
+        }
 
-        case "batch_operation":
+        case "batch_operation": {
+          const validArgs = validateArgs(BatchOperationSchema, args);
           return {
             content: [
               {
                 type: "text",
                 text: JSON.stringify(
-                  await gmailService.batchOperation(args.query, args.operation),
+                  await handlers.batchOperation(validArgs),
                   null,
                   2
                 ),
               },
             ],
           };
+        }
 
         case "list_labels":
           return {
             content: [
               {
                 type: "text",
-                text: JSON.stringify(await gmailService.listLabels(), null, 2),
+                text: JSON.stringify(await handlers.listLabels(), null, 2),
               },
             ],
           };
 
-        case "create_label":
+        case "create_label": {
+          const validArgs = validateArgs(CreateLabelSchema, args);
           return {
             content: [
               {
                 type: "text",
                 text: JSON.stringify(
-                  await gmailService.createLabel(args.name),
+                  await handlers.createLabel(validArgs),
                   null,
                   2
                 ),
               },
             ],
           };
+        }
 
         default:
           throw new Error(`Unknown tool: ${name}`);

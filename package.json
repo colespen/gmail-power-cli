@@ -6,6 +6,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "dev": "tsx src/mcp-server.ts",
     "start": "node dist/mcp-server.js",
     "cli": "tsx src/cli.ts",
@@ -28,7 +29,8 @@
     "googleapis": "^159.0.0",
     "groq-sdk": "^0.32.0",
     "inquirer": "^12.9.4",
-    "ora": "^8.2.0"
+    "ora": "^8.2.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^24.3.1",

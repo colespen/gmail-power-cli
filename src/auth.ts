@@ -1,8 +1,9 @@
 import { authenticate } from "@google-cloud/local-auth";
 import { google, gmail_v1 } from "googleapis";
+import { OAuth2Client as GoogleApisOAuth2Client } from "googleapis-common";
+import { OAuth2Client as GoogleAuthOAuth2Client } from "google-auth-library";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { OAuth2Client } from "google-auth-library";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
@@ -11,17 +12,21 @@ const SCOPES = [
 const TOKEN_PATH = path.join(process.cwd(), "token.json");
 const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
 
-export async function loadSavedCredentialsIfExist(): Promise<OAuth2Client | null> {
+export async function loadSavedCredentialsIfExist(): Promise<GoogleApisOAuth2Client | null> {
   try {
     const content = await fs.readFile(TOKEN_PATH, "utf-8");
     const credentials = JSON.parse(content);
-    return google.auth.fromJSON(credentials) as OAuth2Client;
+    const auth = google.auth.fromJSON(credentials);
+    if (auth instanceof GoogleApisOAuth2Client) {
+      return auth;
+    }
+    return null;
   } catch (err) {
     return null;
   }
 }
 
-export async function saveCredentials(client: OAuth2Client): Promise<void> {
+export async function saveCredentials(client: GoogleAuthOAuth2Client): Promise<void> {
   const content = await fs.readFile(CREDENTIALS_PATH, "utf-8");
   const keys = JSON.parse(content);
   const key = keys.installed || keys.web;
@@ -34,28 +39,50 @@ export async function saveCredentials(client: OAuth2Client): Promise<void> {
   await fs.writeFile(TOKEN_PATH, payload);
 }
 
-export async function authorize(): Promise<OAuth2Client> {
+export async function authorize(): Promise<GoogleApisOAuth2Client> {
   let client = await loadSavedCredentialsIfExist();
 
   if (client) {
     return client;
   }
 
-  client = await authenticate({
+  const authClient = await authenticate({
     scopes: SCOPES,
     keyfilePath: CREDENTIALS_PATH,
   });
 
-  if (client.credentials) {
-    await saveCredentials(client);
+  if (!(authClient instanceof GoogleAuthOAuth2Client)) {
+    throw new Error("Authentication did not return OAuth2Client");
   }
 
-  return client;
+  if (authClient.credentials) {
+    await saveCredentials(authClient);
+  }
+
+  // Convert from google-auth-library OAuth2Client to googleapis-common OAuth2Client
+  // by creating a new GoogleAuth instance and getting the client
+  const refreshToken = authClient.credentials.refresh_token;
+  if (!refreshToken) {
+    throw new Error("No refresh token available");
+  }
+  
+  const googleAuth = google.auth.fromJSON({
+    type: "authorized_user",
+    client_id: authClient._clientId,
+    client_secret: authClient._clientSecret,
+    refresh_token: refreshToken,
+  });
+
+  if (googleAuth instanceof GoogleApisOAuth2Client) {
+    return googleAuth;
+  }
+  
+  throw new Error("Failed to convert auth client to googleapis-compatible format");
 }
 
 export async function getGmailService(): Promise<gmail_v1.Gmail> {
   const auth = await authorize();
-  return google.gmail({ version: "v1", auth });
+  return google.gmail({ version: "v1", auth: auth });
 }
 
 // Run this directly to set up authentication
