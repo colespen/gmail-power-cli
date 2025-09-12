@@ -5,10 +5,10 @@ import chalk from "chalk";
 import ora from "ora";
 import inquirer from "inquirer";
 
-interface ToolCall {
-  name: string;
-  arguments: any;
-}
+// interface ToolCall {
+//   name: string;
+//   arguments: any;
+// }
 
 interface EmailMessage {
   id: string;
@@ -110,13 +110,15 @@ class GmailAICLI {
         type: "function" as const,
         function: {
           name: "read_email",
-          description: "Read the full content of a specific email by its ID. Use actual message IDs from search results, or contextual references like 'first', 'last', '1', '2', etc.",
+          description:
+            "Read the full content of a specific email by its ID. Use actual message IDs from search results, or contextual references like 'first', 'last', '1', '2', etc.",
           parameters: {
             type: "object",
             properties: {
               messageId: {
                 type: "string",
-                description: "The email message ID to read. Use: actual Gmail message ID from search results, OR contextual reference like 'first' (first email from last search), 'last' (last email from search), '1' (first email), '2' (second email), etc.",
+                description:
+                  "The email message ID to read. Use: actual Gmail message ID from search results, OR contextual reference like 'first' (first email from last search), 'last' (last email from search), '1' (first email), '2' (second email), etc.",
               },
             },
             required: ["messageId"],
@@ -372,7 +374,11 @@ class GmailAICLI {
     return confirm;
   }
 
-  private async callTool(toolName: string, args: any, spinner?: any): Promise<any> {
+  private async callTool(
+    toolName: string,
+    args: any,
+    spinner?: any
+  ): Promise<any> {
     const service = await this.initializeGmailService();
 
     switch (toolName) {
@@ -541,7 +547,11 @@ class GmailAICLI {
         return await service.listFilters();
 
       case "confirm_dangerous_action":
-        const confirmed = await this.confirmAction(args.action, args.details, spinner);
+        const confirmed = await this.confirmAction(
+          args.action,
+          args.details,
+          spinner
+        );
         return { confirmed };
 
       case "batch_operation":
@@ -688,7 +698,11 @@ class GmailAICLI {
               )
             );
 
-            const result = await this.callTool(toolCall.function.name, args, toolSpinner);
+            const result = await this.callTool(
+              toolCall.function.name,
+              args,
+              toolSpinner
+            );
             toolSpinner.succeed(`Completed ${toolCall.function.name}`);
 
             // Display results
