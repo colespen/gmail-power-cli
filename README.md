@@ -2,7 +2,7 @@
 
 **🚧 WIP - Work in Progress**
 
-A command-line interface for Gmail that integrates with AI assistants through MCP servers.
+A command-line interface for Gmail that integrates with various LLM's through MCP servers.
 
 CLI example:
 ![CLI Example](./docs/CLI-screengrab-ex1.png)

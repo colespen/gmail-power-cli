@@ -77,20 +77,29 @@ export class GmailService {
       const getHeader = (name: string) =>
         headers.find((h) => h.name === name)?.value || "";
 
-      // extract body
+      // extract body and attachments
       let body = "";
-      const extractBody = (parts: any[]): void => {
+      const attachments: any[] = [];
+
+      const extractContent = (parts: any[]): void => {
         for (const part of parts) {
           if (part.mimeType === "text/plain" && part.body?.data) {
             body += Buffer.from(part.body.data, "base64").toString("utf-8");
+          } else if (part.filename && part.body?.attachmentId) {
+            attachments.push({
+              filename: part.filename,
+              mimeType: part.mimeType,
+              size: part.body?.size,
+              attachmentId: part.body?.attachmentId,
+            });
           } else if (part.parts) {
-            extractBody(part.parts);
+            extractContent(part.parts);
           }
         }
       };
 
       if (message.payload?.parts) {
-        extractBody(message.payload.parts);
+        extractContent(message.payload.parts);
       } else if (message.payload?.body?.data) {
         body = Buffer.from(message.payload.body.data, "base64").toString(
           "utf-8"
@@ -108,14 +117,7 @@ export class GmailService {
         body: body || message.snippet || "",
         snippet: message.snippet,
         labelIds: message.labelIds,
-        attachments: message.payload?.parts
-          ?.filter((p) => p.filename && p.body?.attachmentId)
-          .map((p) => ({
-            filename: p.filename,
-            mimeType: p.mimeType,
-            size: p.body?.size,
-            attachmentId: p.body?.attachmentId,
-          })),
+        attachments,
       };
     } catch (error) {
       throw new Error(`Failed to read email: ${error}`);

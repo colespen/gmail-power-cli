@@ -1,31 +1,8 @@
 import "dotenv/config";
 import Groq from "groq-sdk";
-import * as readline from "readline";
-import chalk from "chalk";
 import ora from "ora";
-import inquirer from "inquirer";
-
-// interface ToolCall {
-//   name: string;
-//   arguments: any;
-// }
-
-interface EmailMessage {
-  id: string;
-  threadId?: string;
-  subject?: string;
-  from?: string;
-  to?: string;
-  date?: string;
-  snippet?: string;
-  labelIds?: string[];
-}
-
-interface Label {
-  id: string;
-  name: string;
-  type?: string;
-}
+import { CLIMessages, EmailMessage, Label } from "./cli-messages.js";
+import { CLIDisplay } from "./cli-display.js";
 
 class GmailAICLI {
   private groq: Groq;
@@ -39,15 +16,7 @@ class GmailAICLI {
   constructor() {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      console.error(
-        chalk.red("Error: GROQ_API_KEY environment variable not set")
-      );
-      console.log(
-        chalk.yellow("Get your FREE API key from: https://console.groq.com")
-      );
-      console.log(
-        chalk.yellow('Then add to .env: GROQ_API_KEY="your-key-here"')
-      );
+      CLIMessages.showApiKeyError();
       process.exit(1);
     }
 
@@ -69,7 +38,7 @@ class GmailAICLI {
     try {
       this.labelsCache = await this.gmailService.listLabels();
     } catch (error) {
-      console.error(chalk.yellow("Warning: Could not cache labels"));
+      CLIMessages.showWarning("Could not cache labels");
     }
   }
 
@@ -348,30 +317,17 @@ class GmailAICLI {
     details: string,
     spinner?: any
   ): Promise<boolean> {
-    // Stop the spinner if provided to allow proper prompt display
     if (spinner) {
       spinner.stop();
     }
 
-    console.log(chalk.yellow(`\n⚠️  Confirmation Required:`));
-    console.log(chalk.white(`Action: ${action}`));
-    console.log(chalk.gray(`Details: ${details}`));
+    const confirmed = await CLIMessages.confirmAction(action, details);
 
-    const { confirm } = await inquirer.prompt([
-      {
-        type: "confirm",
-        name: "confirm",
-        message: "Do you want to proceed?",
-        default: false,
-      },
-    ]);
-
-    // Restart the spinner if provided and confirmation is true
-    if (spinner && confirm) {
+    if (spinner && confirmed) {
       spinner.start();
     }
 
-    return confirm;
+    return confirmed;
   }
 
   private async callTool(
@@ -466,9 +422,7 @@ class GmailAICLI {
               if (refreshedId) {
                 return refreshedId;
               }
-              console.log(
-                chalk.yellow(`Warning: Label "${label}" not found. Skipping.`)
-              );
+              CLIMessages.showWarning(`Label "${label}" not found. Skipping.`);
               return null;
             })
           );
@@ -493,9 +447,7 @@ class GmailAICLI {
               if (refreshedId) {
                 return refreshedId;
               }
-              console.log(
-                chalk.yellow(`Warning: Label "${label}" not found. Skipping.`)
-              );
+              CLIMessages.showWarning(`Label "${label}" not found. Skipping.`);
               return null;
             })
           );
@@ -675,9 +627,8 @@ class GmailAICLI {
 
       const message = response.choices[0].message;
 
-      // Show assistant's response
       if (message.content) {
-        console.log(chalk.cyan("\n" + message.content));
+        CLIMessages.showAssistantResponse(message.content);
       }
 
       // Execute tool calls
@@ -690,13 +641,7 @@ class GmailAICLI {
           try {
             const args = JSON.parse(toolCall.function.arguments);
 
-            // Log for debugging
-            console.log(
-              chalk.gray(
-                `Debug: ${toolCall.function.name} args:`,
-                JSON.stringify(args, null, 2)
-              )
-            );
+            CLIMessages.showDebugInfo(toolCall.function.name, args);
 
             const result = await this.callTool(
               toolCall.function.name,
@@ -725,14 +670,10 @@ class GmailAICLI {
       }
     } catch (error: any) {
       spinner.fail("Failed to process command");
-      console.error(chalk.red("Error: " + error.message));
+      CLIMessages.showError(error.message);
 
       if (error.message.includes("rate")) {
-        console.log(
-          chalk.yellow(
-            "\n💡 Groq service tier `on_demand` tokens per day (TPD): Limit 100000."
-          )
-        );
+        CLIMessages.showRateLimit();
       }
     }
   }
@@ -740,180 +681,62 @@ class GmailAICLI {
   private displayResult(toolName: string, result: any): void {
     switch (toolName) {
       case "search_emails":
-        if (result.messages && result.messages.length > 0) {
-          console.log(
-            chalk.bold(`\n📧 Found ${result.messages.length} emails:\n`)
-          );
-          result.messages.forEach((msg: any, i: number) => {
-            console.log(
-              chalk.white(`${i + 1}. ${msg.subject || "(No subject)"}`)
-            );
-            console.log(chalk.gray(`   From: ${msg.from}`));
-            console.log(chalk.gray(`   Date: ${msg.date}`));
-            if (msg.labelIds?.includes("UNREAD")) {
-              console.log(chalk.yellow(`   📌 Unread`));
-            }
-            if (msg.snippet) {
-              console.log(
-                chalk.gray(`   Preview: ${msg.snippet.substring(0, 80)}...`)
-              );
-            }
-            console.log();
-          });
-        } else {
-          console.log(chalk.yellow("\n📭 No emails found."));
-        }
+        CLIDisplay.showSearchResults(result);
         break;
 
       case "read_email":
-        console.log(chalk.bold(`\n📖 Email Content:\n`));
-        console.log(
-          chalk.white(`Subject: ${result.subject || "(No subject)"}`)
-        );
-        console.log(chalk.white(`From: ${result.from}`));
-        console.log(chalk.white(`To: ${result.to}`));
-        console.log(chalk.white(`Date: ${result.date}`));
-        console.log(chalk.white(`\n--- Message ---\n`));
-        const body = result.body || result.snippet || "";
-        console.log(body.substring(0, 2000));
-        if (body.length > 2000) {
-          console.log(chalk.gray("\n... (truncated for display)"));
-        }
+        CLIDisplay.showEmailContent(result);
         break;
 
       case "modify_labels":
-        console.log(chalk.green(`\n✅ Labels updated successfully!`));
-        const count = result.modified || result.results?.length || 1;
-        console.log(
-          chalk.gray(`Modified ${count} email${count > 1 ? "s" : ""}`)
-        );
+        CLIDisplay.showLabelsModified(result);
         break;
 
       case "create_label":
-        console.log(chalk.green(`\n✅ Label created successfully!`));
-        console.log(chalk.white(`Label name: ${result.name}`));
+        CLIDisplay.showLabelCreated(result);
         break;
 
       case "create_filter":
-        if (result.cancelled) {
-          console.log(chalk.yellow("\n❌ Filter creation cancelled"));
-        } else {
-          console.log(chalk.green("\n✅ Filter created successfully!"));
-          if (result.criteria) {
-            console.log(chalk.white("Criteria:"));
-            Object.entries(result.criteria).forEach(([key, value]) => {
-              console.log(chalk.gray(`  ${key}: ${value}`));
-            });
-          }
-          if (result.action) {
-            console.log(chalk.white("Actions:"));
-            if (result.action.addLabelIds) {
-              console.log(
-                chalk.gray(
-                  `  Apply labels: ${result.action.addLabelIds.join(", ")}`
-                )
-              );
-            }
-            if (result.action.removeLabelIds) {
-              console.log(
-                chalk.gray(
-                  `  Remove labels: ${result.action.removeLabelIds.join(", ")}`
-                )
-              );
-            }
-          }
-        }
+        CLIDisplay.showFilterResult(result);
         break;
 
       case "list_filters":
-        console.log(chalk.bold("\n📋 Gmail Filters:\n"));
-        if (result.length === 0) {
-          console.log(chalk.gray("No filters found"));
-        } else {
-          result.forEach((filter: any, i: number) => {
-            console.log(chalk.white(`${i + 1}. Filter ID: ${filter.id}`));
-            if (filter.criteria) {
-              console.log(chalk.gray("   Criteria:"), filter.criteria);
-            }
-            if (filter.action) {
-              console.log(chalk.gray("   Actions:"), filter.action);
-            }
-            console.log();
-          });
-        }
+        CLIDisplay.showFiltersList(result);
         break;
 
       case "batch_operation":
-        if (result.cancelled) {
-          console.log(chalk.yellow(`\n❌ Batch ${result.operation} cancelled`));
-        } else {
-          console.log(chalk.green(`\n✅ Batch operation completed!`));
-          console.log(chalk.white(`Operation: ${result.operation}`));
-          console.log(chalk.gray(`Affected ${result.affected} emails`));
-        }
+        CLIDisplay.showBatchOperationResult(result);
+        break;
+
+      case "send_email":
+        CLIDisplay.showSendEmailResult(result);
+        break;
+
+      case "list_labels":
+        CLIDisplay.showLabelsList(result);
         break;
 
       default:
-        // Keep other cases as they were
         break;
     }
   }
 
   private showHelp(): void {
-    console.log(chalk.bold("\n📧 Gmail AI Assistant - Help\n"));
-
-    console.log(chalk.yellow("Natural Language Examples:"));
-    console.log(chalk.gray('  • "Show my unread emails"'));
-    console.log(chalk.gray('  • "Read the most recent email from Shopify"'));
-    console.log(chalk.gray('  • "Create a label called Work/Shopify"'));
-    console.log(chalk.gray('  • "Move this email to the Shopify label"'));
-    console.log(chalk.gray('  • "Mark it as read"'));
-    console.log(chalk.gray('  • "Star those emails"'));
-    console.log(chalk.gray('  • "Archive all promotional emails"'));
-
-    console.log(chalk.yellow("\nContext-aware commands:"));
-    console.log(chalk.gray('  • After reading an email: "move it to Work"'));
-    console.log(chalk.gray('  • After searching: "mark them all as read"'));
-    console.log(chalk.gray('  • "Reply to this email" (after reading)'));
-
-    console.log(chalk.yellow("\nCommands:"));
-    console.log(chalk.gray("  • clear - Clear the screen"));
-    console.log(chalk.gray("  • help - Show this help message"));
-    console.log(chalk.gray("  • exit - Quit the assistant\n"));
+    CLIMessages.showHelp();
   }
 
   private async promptUser(): Promise<string> {
-    return new Promise((resolve) => {
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-
-      rl.question(chalk.blue("\nGmail AI > "), (answer) => {
-        rl.close();
-        resolve(answer.trim());
-      });
-    });
+    return CLIMessages.showPrompt();
   }
 
   async start(): Promise<void> {
-    console.clear();
-    console.log(chalk.bold.green("╔════════════════════════════════════════╗"));
-    console.log(chalk.bold.green("║     📨 Gmail AI Assistant              ║"));
-    console.log(chalk.bold.green("║     Powered by Groq (Llama 3.3)        ║"));
-    console.log(chalk.bold.green("╚════════════════════════════════════════╝"));
-    console.log();
-    console.log(chalk.cyan("Natural language Gmail control - Fast & Free!"));
-    console.log(
-      chalk.gray('Try: "show my unread emails" or "help" for more\n')
-    );
+    CLIMessages.showWelcome();
 
-    // Initialize Gmail service
     try {
       await this.initializeGmailService();
-      console.log(chalk.green("✓ Connected to Gmail\n"));
+      CLIMessages.showGmailConnected();
     } catch (error) {
-      console.error(chalk.yellow("⚠️  Gmail auth needed. Run: npm run auth\n"));
+      CLIMessages.showGmailAuthNeeded();
     }
 
     // Main loop
@@ -923,7 +746,7 @@ class GmailAICLI {
       if (!input) continue;
 
       if (input.toLowerCase() === "exit" || input.toLowerCase() === "quit") {
-        console.log(chalk.yellow("\nGoodbye! 👋\n"));
+        CLIMessages.showGoodbye();
         process.exit(0);
       }
 
@@ -933,8 +756,7 @@ class GmailAICLI {
       }
 
       if (input.toLowerCase() === "clear") {
-        console.clear();
-        console.log(chalk.green("🚀 Gmail AI Assistant\n"));
+        CLIMessages.showClearScreen();
         continue;
       }
 
@@ -943,9 +765,8 @@ class GmailAICLI {
   }
 }
 
-// Handle Ctrl+C gracefully
 process.on("SIGINT", () => {
-  console.log(chalk.yellow("\n\nGoodbye! 👋"));
+  CLIMessages.showGoodbye();
   process.exit(0);
 });
 
@@ -955,7 +776,7 @@ async function main() {
     const cli = new GmailAICLI();
     await cli.start();
   } catch (error: any) {
-    console.error(chalk.red("Failed to start:"), error.message);
+    CLIMessages.showError(`Failed to start: ${error.message}`);
     process.exit(1);
   }
 }
