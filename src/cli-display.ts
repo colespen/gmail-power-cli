@@ -1,5 +1,25 @@
 import chalk from "chalk";
-import { EmailMessage, Label } from "./cli-messages.js";
+import { EmailMessage, Label } from "./types.js";
+
+// HTML entity decoder utility
+function decodeHtmlEntities(text: string): string {
+  if (!text) return text;
+
+  const entities: Record<string, string> = {
+    '&#39;': "'",
+    '&quot;': '"',
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&nbsp;': ' ',
+    '&#x27;': "'",
+    '&#x2F;': '/',
+    '&#x60;': '`',
+    '&#x3D;': '='
+  };
+
+  return text.replace(/&#?\w+;/g, (entity) => entities[entity] || entity);
+}
 
 export class CLIDisplay {
   static showSearchResults(result: any): void {
@@ -12,7 +32,7 @@ export class CLIDisplay {
       console.log(chalk.bold(`\n📧 Found ${result.messages.length} emails:\n`));
 
       result.messages.forEach((msg: EmailMessage, i: number) => {
-        console.log(chalk.white(`${i + 1}. ${msg.subject || "(No subject)"}`));
+        console.log(chalk.white(`${i + 1}. ${decodeHtmlEntities(msg.subject || "(No subject)")}`));
         console.log(chalk.gray(`   From: ${msg.from}`));
         console.log(chalk.gray(`   Date: ${msg.date}`));
 
@@ -21,7 +41,8 @@ export class CLIDisplay {
         }
 
         if (msg.snippet) {
-          console.log(chalk.gray(`   Preview: ${msg.snippet.substring(0, 80)}...`));
+          const decodedSnippet = decodeHtmlEntities(msg.snippet);
+          console.log(chalk.gray(`   Preview: ${decodedSnippet.substring(0, 80)}...`));
         }
 
         console.log();
@@ -38,14 +59,15 @@ export class CLIDisplay {
     }
 
     console.log(chalk.bold(`\n📖 Email Content:\n`));
-    console.log(chalk.white(`Subject: ${result.subject || "(No subject)"}`));
+    console.log(chalk.white(`Subject: ${decodeHtmlEntities(result.subject || "(No subject)")}`));
     console.log(chalk.white(`From: ${result.from}`));
     console.log(chalk.white(`To: ${result.to}`));
     console.log(chalk.white(`Date: ${result.date}`));
     console.log(chalk.white(`\n--- Message ---\n`));
 
     const body = result.body || result.snippet || "";
-    console.log(body.substring(0, 2000));
+    const decodedBody = decodeHtmlEntities(body);
+    console.log(decodedBody.substring(0, 2000));
 
     if (body.length > 2000) {
       console.log(chalk.gray("\n... (truncated for display)"));

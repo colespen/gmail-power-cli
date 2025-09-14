@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GmailService } from '../src/gmail-service.js';
-import { mockMessages, mockLabels, server } from './setup.js';
-import { http, HttpResponse } from 'msw';
+import { mockLabels } from './setup.js';
 
 // Mock the auth module first
 vi.mock('../src/auth.js', () => ({

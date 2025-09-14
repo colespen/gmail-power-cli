@@ -2,23 +2,6 @@ import chalk from "chalk";
 import inquirer from "inquirer";
 import * as readline from "readline";
 
-export interface EmailMessage {
-  id: string;
-  threadId?: string;
-  subject?: string;
-  from?: string;
-  to?: string;
-  date?: string;
-  snippet?: string;
-  labelIds?: string[];
-}
-
-export interface Label {
-  id: string;
-  name: string;
-  type?: string;
-}
-
 export class CLIMessages {
   static showWelcome(): void {
     console.clear();

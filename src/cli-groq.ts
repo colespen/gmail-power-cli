@@ -1,16 +1,25 @@
 import "dotenv/config";
 import Groq from "groq-sdk";
 import ora from "ora";
-import { CLIMessages, EmailMessage, Label } from "./cli-messages.js";
+import { CLIMessages } from "./cli-messages.js";
 import { CLIDisplay } from "./cli-display.js";
+import { createSystemPrompt } from "./system-prompts.js";
+import {
+  ChatMessage,
+  // ToolCall,
+  // ChatResponse,
+  EmailMessage,
+  Label,
+  // SearchResult
+} from "./types.js";
 
 class GmailAICLI {
   private groq: Groq;
-  private gmailService: any = null;
+  private gmailService: any = null; // TODO: Type this properly when gmail-service is typed
   private lastEmailIds: string[] = [];
   private lastSearchResults: EmailMessage[] = [];
   private lastReadEmailId: string | null = null;
-  private conversationHistory: any[] = [];
+  private conversationHistory: ChatMessage[] = [];
   private labelsCache: Label[] = [];
 
   constructor() {
@@ -28,7 +37,7 @@ class GmailAICLI {
       const { GmailService } = await import("./gmail-service.js");
       this.gmailService = new GmailService();
       await this.gmailService.initialize();
-      // Cache labels on initialization
+      // cache labels on initialization
       await this.refreshLabelsCache();
     }
     return this.gmailService;
@@ -63,7 +72,7 @@ class GmailAICLI {
               query: {
                 type: "string",
                 description:
-                  'Gmail search query. Examples: "is:unread", "from:someone@example.com", "subject:meeting", "has:attachment", "newer_than:2d"',
+                  'Gmail search query. Examples: "is:unread", "from:someone@example.com", "subject:meeting", "has:attachment", "newer_than:1h", "newer_than:2d", "older_than:1m", "after:2024/01/01", "before:2024/12/31". Time units: h=hours, d=days, m=months, y=years (integers only).',
               },
               maxResults: {
                 type: "number",
@@ -87,7 +96,7 @@ class GmailAICLI {
               messageId: {
                 type: "string",
                 description:
-                  "The email message ID to read. Use: actual Gmail message ID from search results, OR contextual reference like 'first' (first email from last search), 'last' (last email from search), '1' (first email), '2' (second email), etc.",
+                  "The email message ID to read. Use: actual Gmail message ID from search results, OR contextual reference like 'first' (first email from last search), 'last'/'latest' (most recent email), '1' (first email), '2' (second email), etc. System will auto-search if no context exists.",
               },
             },
             required: ["messageId"],
@@ -99,7 +108,7 @@ class GmailAICLI {
         function: {
           name: "modify_labels",
           description:
-            "Add or remove labels from emails. Use label IDs or names.",
+            "Add or remove labels from existing emails. Use this to apply labels to emails from search results or specific email IDs. Use label names or IDs.",
           parameters: {
             type: "object",
             properties: {
@@ -354,11 +363,29 @@ class GmailAICLI {
         // Handle context-aware message IDs
         let messageId = args.messageId;
 
+        // If it's a contextual reference but we have no search context, search first
+        if (
+          (messageId === "first" ||
+            messageId === "last" ||
+            messageId === "latest") &&
+          this.lastEmailIds.length === 0
+        ) {
+          // Auto-search for recent emails to establish context
+          const searchResult = await service.searchEmails("", 10);
+          if (searchResult.messages) {
+            this.lastSearchResults = searchResult.messages;
+            this.lastEmailIds = searchResult.messages.map((m: any) => m.id);
+          }
+        }
+
         // If it's a contextual reference
         if (messageId === "first" && this.lastEmailIds.length > 0) {
           messageId = this.lastEmailIds[0];
-        } else if (messageId === "last" && this.lastEmailIds.length > 0) {
-          messageId = this.lastEmailIds[this.lastEmailIds.length - 1];
+        } else if (
+          (messageId === "last" || messageId === "latest") &&
+          this.lastEmailIds.length > 0
+        ) {
+          messageId = this.lastEmailIds[0]; // Most recent email is first in Gmail API results
         } else if (messageId === "last_read" && this.lastReadEmailId) {
           messageId = this.lastReadEmailId;
         } else if (
@@ -566,6 +593,7 @@ class GmailAICLI {
         if (this.lastEmailIds.length > 5) {
           contextInfo += "...";
         }
+        contextInfo += `\nFor "add these to [label]" or "label these", use modify_labels with these email IDs.`;
       }
 
       if (this.lastSearchResults.length > 0) {
@@ -573,38 +601,11 @@ class GmailAICLI {
         contextInfo += `\nMost recent email from search: "${lastEmail.subject}" from ${lastEmail.from} (ID: ${lastEmail.id})`;
       }
 
-      // builde messages with context
-      const messages: any[] = [
+      // build messages with context
+      const messages: ChatMessage[] = [
         {
           role: "system",
-          content: `You are a helpful Gmail assistant. You help users manage their emails efficiently and SAFELY.
-
-                    CRITICAL SAFETY RULES:
-                    1. NEVER archive emails (removeLabels: ["INBOX"]) unless explicitly asked
-                    2. NEVER delete emails unless explicitly asked
-                    3. When creating filters, only skip inbox if user says "skip inbox" or "archive"
-                    4. Always use create_filter for filter requests, not batch_operation
-
-                    UNDERSTANDING USER INTENT:
-                    - "Create a filter" or "add a filter" → use create_filter tool
-                    - "Apply to existing emails" → use batch_operation or modify_labels
-                    - "Move emails to X" → add label X, do NOT remove from INBOX unless asked
-                    - "Archive emails" → user explicitly wants to remove from INBOX
-
-                    READING EMAILS:
-                    - NEVER use descriptive text as messageId (like "ID of email sent to Michael")
-                    - ALWAYS use actual message IDs from search results OR contextual references
-                    - Use "first", "last", "1", "2", etc. for emails from recent search
-                    - If no recent search, tell user to search first
-
-                    FILTER CREATION:
-                    - For "emails from X go to Y label": create_filter with criteria.from and action.addLabelIds
-                    - Only add removeLabelIds: ["INBOX"] if user says "skip inbox" or "archive automatically"
-                    - Use wildcards for domains: "*@domain.com" matches all emails from that domain
-
-                    ${contextInfo}
-
-                    Remember: Be conservative with destructive actions. When in doubt, don't archive or delete.`,
+          content: createSystemPrompt(contextInfo),
         },
         ...this.conversationHistory,
         {
@@ -613,7 +614,7 @@ class GmailAICLI {
         },
       ];
 
-      // Use Llama 3.3 70B
+      // use Llama 3.3 70B
       const response = await this.groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
         messages,
@@ -631,7 +632,7 @@ class GmailAICLI {
         CLIMessages.showAssistantResponse(message.content);
       }
 
-      // Execute tool calls
+      // execute tool calls
       if (message.tool_calls) {
         for (const toolCall of message.tool_calls) {
           const toolSpinner = ora(
@@ -650,7 +651,6 @@ class GmailAICLI {
             );
             toolSpinner.succeed(`Completed ${toolCall.function.name}`);
 
-            // Display results
             this.displayResult(toolCall.function.name, result);
           } catch (error: any) {
             toolSpinner.fail(`Failed: ${error.message}`);
@@ -658,13 +658,13 @@ class GmailAICLI {
         }
       }
 
-      // Add to conversation history
+      // add to conversation history
       this.conversationHistory.push(
         { role: "user", content: input },
         { role: "assistant", content: message.content || "[Tool execution]" }
       );
 
-      // Keep history manageable
+      // keep history manageable
       if (this.conversationHistory.length > 20) {
         this.conversationHistory = this.conversationHistory.slice(-20);
       }
@@ -739,7 +739,7 @@ class GmailAICLI {
       CLIMessages.showGmailAuthNeeded();
     }
 
-    // Main loop
+    // main loop
     while (true) {
       const input = await this.promptUser();
 
@@ -770,7 +770,6 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
-// Main
 async function main() {
   try {
     const cli = new GmailAICLI();
