@@ -2,7 +2,10 @@
 
 **🚧 WIP - Work in Progress**
 
-A command-line interface for Gmail that integrates with various LLM's through MCP servers.
+A command-line interface for Gmail that integrates with various LLM's through MCP servers
+ - Antrhopic
+ - Gemini
+ - Groq (currently using ~ best free tier)
 
 CLI example:
 ![CLI Example](./docs/CLI-screengrab-ex1.png)

@@ -601,6 +601,18 @@ class GmailAICLI {
         contextInfo += `\nMost recent email from search: "${lastEmail.subject}" from ${lastEmail.from} (ID: ${lastEmail.id})`;
       }
 
+      // Add available labels for proper search syntax
+      if (this.labelsCache.length > 0) {
+        const userLabels = this.labelsCache
+          .filter(label => label.type === 'user')
+          .map(label => label.name)
+          .slice(0, 10); // Show first 10 user labels
+        if (userLabels.length > 0) {
+          contextInfo += `\nAvailable labels for searches: ${userLabels.join(', ')}`;
+          contextInfo += `\nUse exact label names in quotes: label:"${userLabels[0]}"`;
+        }
+      }
+
       // build messages with context
       const messages: ChatMessage[] = [
         {

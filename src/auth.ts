@@ -43,7 +43,24 @@ export async function authorize(): Promise<GoogleApisOAuth2Client> {
   let client = await loadSavedCredentialsIfExist();
 
   if (client) {
-    return client;
+    // Test if the token is still valid
+    try {
+      await client.getAccessToken();
+      return client;
+    } catch (error: any) {
+      if (error.message?.includes('invalid_grant') || error.code === 'invalid_grant') {
+        console.log('Refresh token expired, requiring re-authentication...');
+        // Delete the expired token file
+        try {
+          await fs.unlink(TOKEN_PATH);
+        } catch (unlinkError) {
+          // Token file might not exist, ignore
+        }
+        // Fall through to re-authenticate
+      } else {
+        throw error;
+      }
+    }
   }
 
   const authClient = await authenticate({
@@ -65,7 +82,7 @@ export async function authorize(): Promise<GoogleApisOAuth2Client> {
   if (!refreshToken) {
     throw new Error("No refresh token available");
   }
-  
+
   const googleAuth = google.auth.fromJSON({
     type: "authorized_user",
     client_id: authClient._clientId,
@@ -76,7 +93,7 @@ export async function authorize(): Promise<GoogleApisOAuth2Client> {
   if (googleAuth instanceof GoogleApisOAuth2Client) {
     return googleAuth;
   }
-  
+
   throw new Error("Failed to convert auth client to googleapis-compatible format");
 }
 

@@ -15,10 +15,25 @@ export class GmailService {
     return this.gmail;
   }
 
-  async searchEmails(query: string, maxResults: number = 10) {
-    const gmail = this.ensureInitialized();
-
+  private async withAuthRetry<T>(operation: () => Promise<T>): Promise<T> {
     try {
+      return await operation();
+    } catch (error: any) {
+      if (error.code === 401 || error.message?.includes('invalid_grant')) {
+        console.log('Authentication error detected, re-initializing...');
+        // Re-initialize the Gmail service with fresh auth
+        await this.initialize();
+        // Retry the operation once
+        return await operation();
+      }
+      throw error;
+    }
+  }
+
+  async searchEmails(query: string, maxResults: number = 10) {
+    return this.withAuthRetry(async () => {
+      const gmail = this.ensureInitialized();
+
       const response = await gmail.users.messages.list({
         userId: "me",
         q: query,
@@ -57,15 +72,12 @@ export class GmailService {
       );
 
       return { messages, query, total: response.data.resultSizeEstimate };
-    } catch (error) {
-      throw new Error(`Failed to search emails: ${error}`);
-    }
+    });
   }
 
   async readEmail(messageId: string) {
-    const gmail = this.ensureInitialized();
-
-    try {
+    return this.withAuthRetry(async () => {
+      const gmail = this.ensureInitialized();
       const response = await gmail.users.messages.get({
         userId: "me",
         id: messageId,
@@ -119,9 +131,7 @@ export class GmailService {
         labelIds: message.labelIds,
         attachments,
       };
-    } catch (error) {
-      throw new Error(`Failed to read email: ${error}`);
-    }
+    });
   }
 
   async modifyLabels(
